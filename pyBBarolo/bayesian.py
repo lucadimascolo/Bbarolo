@@ -413,11 +413,17 @@ class BayesianBBarolo(FitMod3D):
                 self._update_profile(rings)
 
             # Calculate the model and the boundaries
-            model, bhi, blo, galmod = self._calculate_model(rings)
+            model_, bhi, blo, galmod = self._calculate_model(rings)
             
+            model = np.zeros(self.data.shape)
+            model[:,blo[1]:bhi[1],blo[0]:bhi[0]] = model_.copy()
+            
+            mask = self.mask.copy()
+            data = self.data.copy()
+
             # Calculate the residuals
-            mask = self.mask[:,blo[1]:bhi[1],blo[0]:bhi[0]]
-            data = self.data[:,blo[1]:bhi[1],blo[0]:bhi[0]]
+            # mask = self.mask[:,blo[1]:bhi[1],blo[0]:bhi[0]]
+            # data = self.data[:,blo[1]:bhi[1],blo[0]:bhi[0]]
 
             kwargs['sigma'] = theta[self.freepar_idx['sigma']][0] if 'sigma' in self.freepar_names else 1
 
@@ -502,8 +508,9 @@ class BayesianBBarolo(FitMod3D):
             # Saving the results into class attributes
             self.results = self.sampler.results
             self.samples = self.results.samples  # Posterior samples
-            self.weights = np.exp(self.results.logwt - self.results.logz[-1])
-                                
+            self.weights = self.results.logwt - self.results.logz[-1]
+            self.weights = np.exp(self.weights) / np.logaddexp.reduce(self.weights)
+
         elif method=='nautilus':
             
             try: 
@@ -518,9 +525,13 @@ class BayesianBBarolo(FitMod3D):
                                             pool=pool,pass_dict=False,**sampler_kwargs)
             self.sampler.run(verbose=verbose,**run_kwargs)
 
-            self.samples, weights, _ = self.sampler.posterior()
-            self.weights = np.exp(weights-weights.max())
+            self.samples, logwt, _ = self.sampler.posterior()
 
+            self.weights = logwt - logwt.max()
+            self.weights = np.exp(self.weights) / np.logaddexp.reduce(self.weights)
+
+        elif method=='pocomc':
+            pass
         else: 
             raise ValueError(f"ERROR! Unknown method '{method}'.")
         
