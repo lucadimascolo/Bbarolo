@@ -26,3 +26,5 @@ BBarolo_MPI-*
 *.app
 *.code-workspace
 src/.vscode/
+
+test*

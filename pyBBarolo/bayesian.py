@@ -206,7 +206,7 @@ class BayesianBBarolo(FitMod3D):
         self.prior_distr = {key: None for key in self.priors.keys()}
     
     
-    def _setup(self,freepar,useBBres=False,**kwargs):
+    def _setup(self,freepar,useBBres=False,trim=True,**kwargs):
         """ Setup function for the fit 
             It sets the following class attributes:
             - self.ndim: number of parameters to fit
@@ -222,6 +222,7 @@ class BayesianBBarolo(FitMod3D):
             return
         
         self.useBBres = useBBres 
+        self.trim = trim
 
         # Determining the number of parameters to fit and indexes for theta
         self.freepar_idx = {}
@@ -415,15 +416,17 @@ class BayesianBBarolo(FitMod3D):
             # Calculate the model and the boundaries
             model_, bhi, blo, galmod = self._calculate_model(rings)
             
-            model = np.zeros(self.data.shape)
-            model[:,blo[1]:bhi[1],blo[0]:bhi[0]] = model_.copy()
-            
-            mask = self.mask.copy()
-            data = self.data.copy()
-
             # Calculate the residuals
-            # mask = self.mask[:,blo[1]:bhi[1],blo[0]:bhi[0]]
-            # data = self.data[:,blo[1]:bhi[1],blo[0]:bhi[0]]
+            if self.trim:
+                model = model_.copy()
+                mask = self.mask[:,blo[1]:bhi[1],blo[0]:bhi[0]]
+                data = self.data[:,blo[1]:bhi[1],blo[0]:bhi[0]]
+            else:
+                model = np.zeros(self.data.shape)
+                model[:,blo[1]:bhi[1],blo[0]:bhi[0]] = model_.copy()
+                
+                mask = self.mask.copy()
+                data = self.data.copy()
 
             kwargs['sigma'] = theta[self.freepar_idx['sigma']][0] if 'sigma' in self.freepar_names else 1
 
@@ -446,7 +449,7 @@ class BayesianBBarolo(FitMod3D):
         return p
     
     
-    def _compute(self,threads=1,freepar=['vrot'],method='dynesty', useBBres = False, \
+    def _compute(self,threads=1,freepar=['vrot'],method='dynesty', useBBres = False, resample = True,\
                  sampler_kwargs : dict = {}, run_kwargs : dict = {}, like_kwargs : dict = {}, **kwargs):
         
         """ Front-end function to fit a model.
@@ -535,8 +538,7 @@ class BayesianBBarolo(FitMod3D):
         else: 
             raise ValueError(f"ERROR! Unknown method '{method}'.")
         
-        
-        self.samples = resample_equal(self.samples,self.weights)
+        if resample: self.samples = resample_equal(self.samples,self.weights)
         self.params = np.median(self.samples,axis=0)
 
         dt = time.time()-toc
